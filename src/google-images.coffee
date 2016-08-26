@@ -14,11 +14,48 @@
 #   hubot animate me <query> - The same thing as `image me`, except adds a few parameters to try to return an animated GIF instead.
 #   hubot mustache me <url|query> - Adds a mustache to the specified URL or query result.
 
+Twit = require "twit"
+
+config =
+  consumer_key: process.env.HUBOT_TWITTER_CONSUMER_KEY
+  consumer_secret: process.env.HUBOT_TWITTER_CONSUMER_SECRET
+  access_token: process.env.HUBOT_TWITTER_ACCESS_TOKEN
+  access_token_secret: process.env.HUBOT_TWITTER_ACCESS_TOKEN_SECRET
+
+twit = undefined
+
+getTwit = ->
+  unless twit
+    twit = new Twit config
+  return twit
+
 module.exports = (robot) ->
 
   robot.respond /(image|img)( me)? (.+)/i, (msg) ->
     imageMe msg, msg.match[3], (url) ->
       msg.send url
+      b64content = fs.readFileSync(url, encoding: 'base64')
+      # first we must post the media to Twitter 
+      twit = getTwit()
+      twit.post 'media/upload', { media_data: b64content }, (err, data, response) ->
+        # now we can assign alt text to the media, for use by screen readers and 
+      # other text-based presentations and interpreters 
+      mediaIdStr = data.media_id_string
+      altText = 'Small flowers in a planter on a sunny balcony, blossoming.'
+  meta_params = 
+    media_id: mediaIdStr
+    alt_text: text: altText
+  T.post 'media/metadata/create', meta_params, (err, data, response) ->
+    if !err
+      # now we can reference the media and post a tweet (media will attach to the tweet) 
+      params = 
+        status: 'loving life #nofilter'
+        media_ids: [ mediaIdStr ]
+      T.post 'statuses/update', params, (err, data, response) ->
+        console.log data
+        return
+    return
+  return
 
   robot.respond /animate( me)? (.+)/i, (msg) ->
     imageMe msg, msg.match[2], true, (url) ->
